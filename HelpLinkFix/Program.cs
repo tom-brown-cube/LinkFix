@@ -1,7 +1,7 @@
-﻿// See https://aka.ms/new-console-template for more information
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
+using System.IO;
 
-static void SearchInFile(string filePath)
+static void SearchInFile(string filePath, StreamWriter logWriter)
 {
     // Regex pattern to match href starting with an alphabetic character, excluding "mailto:"
     string pattern = "<a href=\"(?!mailto:)[a-zA-Z]";
@@ -18,41 +18,53 @@ static void SearchInFile(string filePath)
         {
             if (!printHeader)
             {
-                // Print the filename and separator only once when the first match is found
-                Console.WriteLine($"File: {filePath}");
-                Console.WriteLine(new string('_', 80)); // Separator line of underscores
+                // Write the filename and separator only once when the first match is found
+                logWriter.WriteLine($"File: {filePath}");
+                logWriter.WriteLine(new string('_', 80)); // Separator line of underscores
                 printHeader = true;
             }
 
-            // Output match details in the new format
-            Console.WriteLine($"Line: {lineNumber + 1} - Position: {match.Index}");
-            Console.WriteLine(line.Trim());
+            // Write match details in the new format
+            logWriter.WriteLine($"Line: {lineNumber + 1} - Position: {match.Index}");
+            logWriter.WriteLine(line.Trim());
         }
     }
 }
 
-
-Console.WriteLine("Hello, World!");
-
-Console.WriteLine("Enter the root directory path to search:");
-//string rootPath = Console.ReadLine();
-string rootPath = @"C:\Users\Tom.Brown.THECONTENTGROUP\Documents\Work\MadCap\Help-20250408";
+string testProject = @"Work\MadCap\Help-20250408";
+string rootPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), testProject);
 
 if (!Directory.Exists(rootPath))
 {
-    Console.WriteLine("Directory does not exist!");
-    return;
+    Console.WriteLine("Enter the root directory path to search:");
+    rootPath = Console.ReadLine();
+    if (!Directory.Exists(rootPath))
+    {
+        Console.WriteLine("Directory does not exist!");
+        return;
+    }
 }
 
+string logFilePath = Path.Combine(rootPath, "HelpLinkFixResults.log");
+if (File.Exists(logFilePath))
+{
+    File.Delete(logFilePath);
+}
 try
 {
-    // Get all .htm files in the directory and subdirectories
-    string[] files = Directory.GetFiles(rootPath, "*.htm", SearchOption.AllDirectories);
-
-    foreach (string file in files)
+    // Open the log file for writing
+    using (StreamWriter logWriter = new StreamWriter(logFilePath, false))
     {
-        SearchInFile(file);
+        // Get all .htm files in the directory and subdirectories
+        string[] files = Directory.GetFiles(rootPath, "*.htm", SearchOption.AllDirectories);
+
+        foreach (string file in files)
+        {
+            SearchInFile(file, logWriter);
+        }
     }
+
+    Console.WriteLine($"Results have been written to: {logFilePath}");
 }
 catch (Exception ex)
 {
@@ -61,5 +73,4 @@ catch (Exception ex)
 
 Console.WriteLine("\nPress any key to exit...");
 Console.ReadKey();
-
 
