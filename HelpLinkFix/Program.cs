@@ -1,7 +1,8 @@
 ﻿using System.Text.RegularExpressions;
 using System.IO;
 
-static void SearchInFile(string filePath, string baseFolder, StreamWriter logWriter)
+static int SearchInFile(string filePath, string baseFolder, 
+    StreamWriter logWriter, List<string> excludedDirectLinks)
 {
     // Regex pattern to match href starting with an alphabetic character, excluding "mailto:"
     string pattern = "<a href=\"(?!mailto:)[a-zA-Z]";
@@ -12,6 +13,7 @@ static void SearchInFile(string filePath, string baseFolder, StreamWriter logWri
 
     bool printHeader = false; // Flag to track if there are any matches
 
+    int directLinkCount = 0;
     for (int lineNumber = 0; lineNumber < lines.Length; lineNumber++)
     {
         string line = lines[lineNumber];
@@ -32,14 +34,20 @@ static void SearchInFile(string filePath, string baseFolder, StreamWriter logWri
 
             // Check if the href is a direct link to an .htm file (no folder structure)
             bool isDirectLink = hrefValue.EndsWith(".htm", StringComparison.OrdinalIgnoreCase) &&
-                                !hrefValue.Contains('/');
-
-            // Write match details with the marker if it's a direct link
-            string marker = isDirectLink ? " ***>>" : string.Empty;
-            logWriter.WriteLine($"Line: {lineNumber + 1} - Position: {match.Index}{marker}");
-            logWriter.WriteLine(line.Trim());
+                                !hrefValue.Contains('/') &&
+                                !excludedDirectLinks.Contains(hrefValue, StringComparer.OrdinalIgnoreCase); ;
+            if (isDirectLink)
+            {
+                // Write match details with the marker if it's a direct link
+               // string marker = isDirectLink ? " ***>>" : string.Empty;
+                logWriter.WriteLine($"Line: {lineNumber + 1} - Position: {match.Index}");
+                logWriter.WriteLine(line.Trim());
+                directLinkCount++;
+            }
         }
     }
+
+    return directLinkCount;
 }
 // Helper method to extract the href value from the match
 static string ExtractHrefValue(string matchValue)
@@ -50,7 +58,7 @@ static string ExtractHrefValue(string matchValue)
 }
 
 
-string testProject = @"Work\MadCap\Help-20250408";
+string testProject = @"Work\MadCap\Help-20250408\RGPHELPPORTAL";
 string rootPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), testProject);
 
 if (!Directory.Exists(rootPath))
@@ -71,19 +79,42 @@ if (File.Exists(logFilePath))
 }
 try
 {
+    int totalDirectLinks = 0;
+
+    // Hardcoded list of excluded direct links
+    List<string> excludedDirectLinks = new List<string> { "home.htm", "search.htm", "glossary.htm" };
+    // read all htm files in the rootPath and put the filenames into excludedDirectLinks
+    // Read all .htm files in the rootPath and add their filenames to excludedDirectLinks
+    string[] allHtmFiles = Directory.GetFiles(rootPath, "*.htm", SearchOption.TopDirectoryOnly);
+    foreach (string file in allHtmFiles)
+    {
+        string fileName = Path.GetFileName(file);
+        if (!excludedDirectLinks.Contains(fileName, StringComparer.OrdinalIgnoreCase))
+        {
+            excludedDirectLinks.Add(fileName);
+        }
+    }
+
+
     // Open the log file for writing
     using (StreamWriter logWriter = new StreamWriter(logFilePath, false))
     {
         // Get all .htm files in the directory and subdirectories
         string[] files = Directory.GetFiles(rootPath, "*.htm", SearchOption.AllDirectories);
 
+
         foreach (string file in files)
         {
-            SearchInFile(file, rootPath, logWriter);
+            var directLinks =    SearchInFile(file, rootPath, logWriter, excludedDirectLinks);
+            if (directLinks > 0)
+            {
+                logWriter.WriteLine($"DirectLinks {directLinks} in File: {file}");
+                totalDirectLinks += directLinks;
+            }
         }
     }
 
-    Console.WriteLine($"Results have been written to: {logFilePath}");
+    Console.WriteLine($"Total Direct Links: {totalDirectLinks}   Results have been written to: {logFilePath}");
 }
 catch (Exception ex)
 {
